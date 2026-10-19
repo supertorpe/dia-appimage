@@ -1,19 +1,10 @@
 name: Build AppImage
 
 on:
-  # Manual run from the Actions tab; pick the dia ref (tag/branch/SHA) to
-  # build, or leave empty for dia's default branch.
-  workflow_dispatch:
-    inputs:
-      dia_ref:
-        description: "dia ref to build (tag, branch, or SHA; empty = default branch)"
-        required: false
-        default: ""
-  # PROBE ONLY — used to trigger this draft once from a non-default branch
-  # (workflow_dispatch can only be triggered for workflows on the default
-  # branch). Remove when the workflow lands on main.
+  # Pushed by publish.sh: an annotated `build-<ref>` tag triggers a build of
+  # that dia ref; the release is tagged with the version from dia's meson.build.
   push:
-    tags: ["probe-*"]
+    tags: ["build-*"]
 
 # The publish step creates/updates releases with the built-in GITHUB_TOKEN.
 permissions:
@@ -34,10 +25,14 @@ jobs:
       # The whole build happens inside Docker (image compiles libxml2 +
       # xpm-pixbuf, clones dia, builds and verifies the AppImage); the runner
       # itself only needs Docker, which the hosted runners ship preinstalled.
+      # The dia ref comes from the trigger tag name (build-<ref>).
       - name: Build AppImage (Docker)
         env:
-          DIA_REF: ${{ github.event.inputs.dia_ref || '' }}
-        run: ./run.sh
+          DIA_REF: ${{ github.ref_name }}
+        run: |
+          export DIA_REF="${DIA_REF#build-}"
+          echo "Building dia ref: $DIA_REF"
+          ./run.sh
 
       - name: Generate SHA256SUMS
         run: |
@@ -50,14 +45,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          dia_ref="${GITHUB_REF_NAME#build-}"
           appimage=$(ls output/*.AppImage)
+          # The version comes from dia's meson.build (parsed into the
+          # artifact name by build-appimage.sh); it names the release tag.
           version=$(basename "$appimage" | sed -n 's/^dia-\(.*\)-x86_64\.AppImage$/\1/p')
           [ -n "$version" ] || { echo "could not parse version from $appimage" >&2; exit 1; }
-          tag="dia-${version}"
+          tag="$version"
           {
-            echo "Automated build of Dia ${version} (x86_64 AppImage) from [gnome/dia](https://github.com/gnome/dia)."
+            echo "Automated build of Dia ${version} (x86_64 AppImage) from [gnome/dia](https://github.com/gnome/dia) ref \`${dia_ref}\`."
             echo
-            echo "Built from this repository at \`${GITHUB_SHA}\` (trigger: ${GITHUB_REF_NAME})."
+            echo "Built from this repository at \`${GITHUB_SHA}\`."
             echo
             echo '```'
             cat output/SHA256SUMS

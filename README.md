@@ -47,6 +47,24 @@ repository URL, e.g. to build from a fork:
 DIA_REPO=https://github.com/<user>/dia DIA_REF=<branch> ./run.sh
 ```
 
+## Publishing a release
+
+Releases are built by GitHub Actions, not locally. When a new dia version
+appears upstream (or you want to cut a release from any ref):
+
+```bash
+./publish.sh              # build dia's main branch
+./publish.sh DIA_0_98_1   # build a specific tag, branch, or commit SHA
+```
+
+`publish.sh` validates the ref and pushes an annotated `build-<ref>` trigger
+tag to this repository. The tag push triggers
+`.github/workflows/build-appimage.yml`, which runs `./run.sh` on a GitHub
+runner and publishes a GitHub Release named after the version in dia's
+`meson.build` (e.g. `0.98.0`), with the AppImage and a `SHA256SUMS` file as
+download assets. Watch progress in the Actions tab; the result appears under
+[Releases](https://github.com/supertorpe/dia-appimage/releases).
+
 ## Files
 
 | File | Purpose |
@@ -54,6 +72,9 @@ DIA_REPO=https://github.com/<user>/dia DIA_REF=<branch> ./run.sh
 | `Dockerfile` | Build environment: toolchain, GTK3 stack, pinned libxml2 2.14.6 + xpm-pixbuf (built from source into `/usr/local`), and the AppImage tooling (`linuxdeploy`, `linuxdeploy-plugin-gtk`, `appimagetool`). |
 | `build-appimage.sh` | Runs inside the container: shallow-clone dia → meson compile → stage `AppDir` → linuxdeploy + GTK plugin → appimagetool → verify. |
 | `run.sh` | Host entry point: builds the image, runs the container (passing `DIA_REPO`/`DIA_REF` through when set), and mounts `output/` for the artifact. |
+| `publish.sh` | Host entry point for releases: validates the dia ref and pushes the `build-<ref>` trigger tag that kicks off the CI build. |
+| `tests/test-publish.sh` | Tests for `publish.sh` against local git fixtures (no network needed): `bash tests/test-publish.sh`. |
+| `.github/workflows/build-appimage.yml` | CI: on a `build-*` tag push, runs `run.sh` on a GitHub runner and publishes the AppImage to a GitHub Release named after the dia version. |
 | `.dockerignore` | Keeps `output/` out of the image build context. |
 
 ## How the AppImage works
