@@ -1,0 +1,73 @@
+name: Build AppImage
+
+on:
+  # Manual run from the Actions tab; pick the dia ref (tag/branch/SHA) to
+  # build, or leave empty for dia's default branch.
+  workflow_dispatch:
+    inputs:
+      dia_ref:
+        description: "dia ref to build (tag, branch, or SHA; empty = default branch)"
+        required: false
+        default: ""
+  # PROBE ONLY — used to trigger this draft once from a non-default branch
+  # (workflow_dispatch can only be triggered for workflows on the default
+  # branch). Remove when the workflow lands on main.
+  push:
+    tags: ["probe-*"]
+
+# The publish step creates/updates releases with the built-in GITHUB_TOKEN.
+permissions:
+  contents: write
+
+# One build at a time; never cancel a release upload in flight.
+concurrency:
+  group: build-appimage
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      # The whole build happens inside Docker (image compiles libxml2 +
+      # xpm-pixbuf, clones dia, builds and verifies the AppImage); the runner
+      # itself only needs Docker, which the hosted runners ship preinstalled.
+      - name: Build AppImage (Docker)
+        env:
+          DIA_REF: ${{ github.event.inputs.dia_ref || '' }}
+        run: ./run.sh
+
+      - name: Generate SHA256SUMS
+        run: |
+          cd output
+          sha256sum -- *.AppImage > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          appimage=$(ls output/*.AppImage)
+          version=$(basename "$appimage" | sed -n 's/^dia-\(.*\)-x86_64\.AppImage$/\1/p')
+          [ -n "$version" ] || { echo "could not parse version from $appimage" >&2; exit 1; }
+          tag="dia-${version}"
+          {
+            echo "Automated build of Dia ${version} (x86_64 AppImage) from [gnome/dia](https://github.com/gnome/dia)."
+            echo
+            echo "Built from this repository at \`${GITHUB_SHA}\` (trigger: ${GITHUB_REF_NAME})."
+            echo
+            echo '```'
+            cat output/SHA256SUMS
+            echo '```'
+          } > notes.md
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "$appimage" output/SHA256SUMS --clobber
+          else
+            gh release create "$tag" "$appimage" output/SHA256SUMS \
+              --title "Dia ${version} (x86_64)" \
+              --notes-file notes.md
+          fi
+          echo "Release: https://github.com/${GITHUB_REPOSITORY}/releases/tag/${tag}"
