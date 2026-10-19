@@ -53,7 +53,7 @@ Releases are built by GitHub Actions, not locally. When a new dia version
 appears upstream (or you want to cut a release from any ref):
 
 ```bash
-./publish.sh              # build dia's main branch
+./publish.sh              # build dia's default branch
 ./publish.sh DIA_0_98_1   # build a specific tag, branch, or commit SHA
 ```
 

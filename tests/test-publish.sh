@@ -168,6 +168,15 @@ test_rerun_moves_trigger_tag() {
     [ "$commit" = "$(git -C "$SB/origin.git" rev-parse main)" ] || return 1
 }
 
+test_default_ref_resolves_upstream_default_branch() {
+    make_sandbox
+    # upstream's default branch is master, not main (like gnome/dia)
+    git -C "$SB/upstream.git" symbolic-ref HEAD refs/heads/master
+    git -C "$SB/upstream.git" branch -m main master
+    run_pub || return 1
+    origin_has_tag build-master || return 1
+}
+
 test_full_sha_accepted() {
     make_sandbox
     local sha
@@ -192,6 +201,7 @@ t "dirty working tree is rejected" test_dirty_tree_rejected
 t "non-main branch is rejected" test_non_main_branch_rejected
 t "local main out of sync with origin is rejected" test_local_main_out_of_sync_rejected
 t "re-running moves the trigger tag to new HEAD" test_rerun_moves_trigger_tag
+t "default ref resolves upstream's default branch" test_default_ref_resolves_upstream_default_branch
 t "full commit SHA is accepted" test_full_sha_accepted
 t "extra arguments are rejected" test_too_many_args_rejected
 

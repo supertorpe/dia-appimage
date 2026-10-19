@@ -7,17 +7,25 @@
 # Docker and publishes a GitHub Release named after the version in dia's
 # meson.build.
 #
-# Usage: ./publish.sh [dia-ref]     (default: main)
+# Usage: ./publish.sh [dia-ref]     (default: the upstream's default branch)
 #
 # DIA_REPO overrides the upstream dia repository (default: gnome/dia), mainly
 # for testing against a fork or local fixture.
 set -euo pipefail
 
-REF=${1:-main}
+REF=${1:-HEAD}
 [ "$#" -le 1 ] || { echo "usage: $0 [dia-ref]" >&2; exit 2; }
-TAG="build-$REF"
 DIA_REPO=${DIA_REPO:-https://github.com/gnome/dia}
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# A bare HEAD means "the upstream's default branch"; resolve it to the real
+# branch name so the trigger tag (and CI log) is meaningful, e.g. build-master.
+if [ "$REF" = "HEAD" ]; then
+    REF=$(git ls-remote --symref "$DIA_REPO" HEAD \
+        | sed -n 's|^ref: refs/heads/\(.*\)\tHEAD$|\1|p')
+    [ -n "$REF" ] || die "could not resolve the default branch of $DIA_REPO"
+fi
+TAG="build-$REF"
 
 [ "$(git symbolic-ref --short HEAD 2>/dev/null)" = "main" ] \
     || die "check out main first"
