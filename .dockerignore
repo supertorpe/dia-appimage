@@ -1,0 +1,3 @@
+# keep the docker build context small; AppImages never need to be in it
+output/
+*.AppImage
